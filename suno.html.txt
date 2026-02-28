@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Why JSON-style prompts underperform in Suno V5 — A 50-Song Experiment</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface2: #1a1a1a;
+      --border: #222222;
+      --accent: #e8ff47;
+      --accent2: #ff6b35;
+      --text: #e8e4dc;
+      --text-muted: #666;
+      --text-dim: #999;
+      --mono: 'IBM Plex Mono', monospace;
+      --serif: 'Playfair Display', serif;
+      --sans: 'DM Sans', sans-serif;
+    }
+
+```
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.75;
+  overflow-x: hidden;
+}
+
+/* NOISE OVERLAY */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.4;
+}
+
+/* PROGRESS BAR */
+#progress {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  background: var(--accent);
+  width: 0%;
+  z-index: 100;
+  transition: width 0.1s;
+}
+
+/* NAV */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 50;
+  padding: 20px 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(10,10,10,0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.nav-tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: rgba(232,255,71,0.08);
+  border: 1px solid rgba(232,255,71,0.2);
+  padding: 4px 10px;
+  border-radius: 2px;
+  letter-spacing: 0.1em;
+}
+
+/* HERO */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 120px 48px 80px;
+  position: relative;
+  border-bottom: 1px solid var(--border);
+}
+
+.hero-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.hero-eyebrow::before {
+  content: '';
+  width: 40px;
+  height: 1px;
+  background: var(--accent);
+}
+
+.hero h1 {
+  font-family: var(--serif);
+  font-size: clamp(36px, 6vw, 80px);
+  font-weight: 900;
+  line-height: 1.05;
+  max-width: 900px;
+  margin-bottom: 40px;
+  letter-spacing: -0.02em;
+}
+
+.hero h1 em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.hero-meta {
+  display: flex;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meta-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.meta-value {
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.hero-bg-text {
+  position: absolute;
+  top: 50%;
+  right: -20px;
+  transform: translateY(-50%);
+  font-family: var(--serif);
+  font-size: clamp(120px, 20vw, 280px);
+  font-weight: 900;
+  color: rgba(255,255,255,0.015);
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  letter-spacing: -0.05em;
+}
+
+/* LAYOUT */
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 48px;
+}
+
+section {
+  padding: 100px 48px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.section-number {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.2em;
+  margin-bottom: 20px;
+  display: block;
+}
+
+h2 {
+  font-family: var(--serif);
+  font-size: clamp(28px, 4vw, 48px);
+  font-weight: 700;
+  line-height: 1.15;
+  margin-bottom: 40px;
+  letter-spacing: -0.02em;
+}
+
+h3 {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  margin-top: 40px;
+}
+
+p {
+  color: var(--text-dim);
+  margin-bottom: 20px;
+  max-width: 720px;
+  font-weight: 300;
+}
+
+strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* CALLOUT */
+.callout {
+  border-left: 3px solid var(--accent);
+  padding: 20px 28px;
+  background: rgba(232,255,71,0.04);
+  margin: 32px 0;
+  max-width: 720px;
+}
+
+.callout p {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+}
+
+/* CODE BLOCKS */
+.code-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin: 40px 0;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.code-block {
+  background: var(--surface);
+  padding: 0;
+}
+
+.code-header {
+  padding: 12px 20px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.code-header.json { color: var(--accent2); background: rgba(255,107,53,0.06); }
+.code-header.natural { color: var(--accent); background: rgba(232,255,71,0.06); }
+
+.badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 2px;
+}
+
+.badge.poor { background: rgba(255,107,53,0.15); color: var(--accent2); }
+.badge.good { background: rgba(232,255,71,0.12); color: var(--accent); }
+
+pre {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  padding: 24px 20px;
+  color: #aaa;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+pre .key { color: #7dd3fc; }
+pre .val { color: #86efac; }
+pre .str { color: #fca5a5; }
+pre .comment { color: #555; font-style: italic; }
+
+/* DATA TABLE */
+.data-table-wrap {
+  overflow-x: auto;
+  margin: 40px 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+thead tr {
+  border-bottom: 2px solid var(--border);
+}
+
+th {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 12px 16px;
+  text-align: left;
+}
+
+td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  vertical-align: top;
+}
+
+tr:last-child td { border-bottom: none; }
+
+tr:hover td { background: rgba(255,255,255,0.02); }
+
+.score-high { color: var(--accent); font-weight: 500; font-family: var(--mono); }
+.score-low { color: var(--accent2); font-weight: 500; font-family: var(--mono); }
+.score-mid { color: #f0c040; font-weight: 500; font-family: var(--mono); }
+
+/* BAR CHART */
+.chart-section {
+  margin: 48px 0;
+}
+
+.chart-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+
+.bar-group {
+  margin-bottom: 28px;
+}
+
+.bar-label {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.bar-label span:last-child {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.bar-track {
+  height: 8px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bar-fill.json-bar { background: var(--accent2); }
+.bar-fill.natural-bar { background: var(--accent); }
+.bar-fill.animated { transform: scaleX(1); }
+
+/* INSIGHT CARDS */
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  margin: 40px 0;
+}
+
+.insight-card {
+  background: var(--surface);
+  padding: 32px;
+}
+
+.insight-number {
+  font-family: var(--mono);
+  font-size: 48px;
+  font-weight: 500;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+
+.insight-number.accent { color: var(--accent); }
+.insight-number.accent2 { color: var(--accent2); }
+.insight-number.neutral { color: var(--text-dim); }
+
+.insight-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* THEORY BLOCK */
+.theory-block {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 40px;
+  align-items: start;
+  margin: 40px 0;
+  padding: 40px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.theory-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  line-height: 1.8;
+}
+
+/* RECOMMENDATIONS */
+.rec-list {
+  list-style: none;
+  margin: 32px 0;
+}
+
+.rec-list li {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 20px;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+}
+
+.rec-list li:last-child { border-bottom: none; }
+
+.rec-num {
+  font-family: var(--mono);
+  font-size: 28px;
+  color: var(--accent);
+  line-height: 1;
+  font-weight: 500;
+}
+
+.rec-title {
+  font-size: 16px;
+  color: var(--text);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.rec-desc {
+  font-size: 14px;
+  color: var(--text-muted);
+  max-width: 600px;
+  margin: 0;
+}
+
+/* FOOTER */
+footer {
+  padding: 60px 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: gap;
+}
+
+.footer-text {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+}
+
+.footer-cta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  border: 1px solid rgba(232,255,71,0.3);
+  padding: 10px 20px;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.footer-cta:hover {
+  background: rgba(232,255,71,0.08);
+}
+
+/* DIVIDER */
+.divider {
+  width: 40px;
+  height: 1px;
+  background: var(--border);
+  margin: 40px 0;
+}
+
+/* ANIMATE IN */
+.fade-up {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+
+.fade-up.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  nav { padding: 16px 24px; }
+  .hero { padding: 100px 24px 60px; }
+  section { padding: 60px 24px; }
+  .code-compare { grid-template-columns: 1fr; }
+  .theory-block { grid-template-columns: 1fr; }
+  footer { padding: 40px 24px; flex-direction: column; gap: 20px; }
+}
+```
+
+  </style>
+</head>
+<body>
+
+<div id="progress"></div>
+
+<nav>
+  <span class="nav-label">Suno AI Research · 2025</span>
+  <span class="nav-tag">50-Song Experiment</span>
+</nav>
+
+<!-- HERO -->
+
+<header class="hero">
+  <div class="hero-bg-text">V5</div>
+  <div class="hero-eyebrow">Prompt Engineering Research</div>
+  <h1>Why <em>JSON-style</em> prompts underperform in Suno V5</h1>
+  <div class="hero-meta">
+    <div class="meta-item">
+      <span class="meta-label">Experiment Size</span>
+      <span class="meta-value">50 songs (25 JSON · 25 Natural Language)</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Model Tested</span>
+      <span class="meta-value">Suno V5 (Sep 2025)</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Author Background</span>
+      <span class="meta-value">220+ songs generated over 3 months</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Published</span>
+      <span class="meta-value">February 2026</span>
+    </div>
+  </div>
+</header>
+
+<!-- SECTION 1: OBSERVATION -->
+
+<section>
+  <span class="section-number">01 — Observation</span>
+  <h2>The phenomenon that started this research</h2>
+
+  <p>
+    After generating over 220 songs on Suno across three months, a consistent pattern emerged: 
+    <strong>structured, JSON-style style prompts — despite being logically precise and human-readable — 
+    consistently produced worse musical output than equivalent natural language descriptions.</strong>
+  </p>
+
+  <p>
+    The intuition behind JSON prompts is reasonable. By organizing musical parameters into 
+    key-value pairs — separating genre, tempo, drum characteristics, chord voicings — 
+    a creator gains a sense of systematic control. The prompt feels engineered. Exact.
+  </p>
+
+  <p>
+    But the music said otherwise. Tracks generated from JSON-style prompts tended to sound 
+    more rigid, less emotionally coherent, and occasionally showed signs of prompt 
+    "leakage" — where structural syntax tokens appeared to bleed into lyrical generation. 
+    Natural language prompts, while less visually organized, consistently produced warmer, 
+    more stylistically accurate results.
+  </p>
+
+  <div class="callout">
+    <p>
+      <strong>Core question:</strong> Is this a coincidence, a user error, or a fundamental 
+      property of how Suno V5 processes input? This experiment was designed to find out.
+    </p>
+  </div>
+</section>
+
+<!-- SECTION 2: EXPERIMENT DESIGN -->
+
+<section>
+  <span class="section-number">02 — Experiment Design</span>
+  <h2>Methodology: same intent, two formats</h2>
+
+  <p>
+    The experiment used a single musical concept — a <strong>90s R&B / Neo-Soul fusion track 
+    at 92–98 BPM with jazz chord voicings and a laid-back groove</strong> — and expressed it 
+    in two fundamentally different prompt formats. All other variables (lyrics, generation 
+    seed type, model version) were held constant.
+  </p>
+
+  <p>
+    25 songs were generated per format. Each was evaluated on five dimensions: 
+    Style Accuracy, Vocal Naturalness, Rhythmic Coherence, Mix Clarity, and 
+    Prompt Leakage Rate (whether style tokens appeared in lyrics).
+  </p>
+
+  <div class="code-compare fade-up">
+    <div class="code-block">
+      <div class="code-header json">
+        <span>Prompt 1 — JSON Structure</span>
+        <span class="badge poor">Underperforms</span>
+      </div>
+      <pre><span class="comment">// Structured, key-value format</span>
+{
+  <span class="key">"genre"</span>: <span class="str">"90s R&B / Neo-Soul Fusion"</span>,
+  <span class="key">"tempo"</span>: <span class="str">"92-98 BPM"</span>,
+  <span class="key">"groove"</span>: <span class="str">"swinged mid-tempo pocket, 
+    deep laid-back rhythm"</span>,
+  <span class="key">"drums"</span>: {
+    <span class="key">"clap"</span>: <span class="str">"Reverse clap placed 
+      before main clap hit"</span>,
+    <span class="key">"snare"</span>: <span class="str">"Soft layered snare 
+      with analog warmth"</span>,
+    <span class="key">"kick"</span>: <span class="str">"Rounded, sub-heavy 
+      but controlled"</span>,
+    <span class="key">"hi_hat"</span>: <span class="str">"Loose swing groove, 
+      subtle triplet bounce"</span>
+  },
+  <span class="key">"chords"</span>: {
+    <span class="key">"progression_style"</span>: <span class="str">"Extended 
+      jazz voicings (9th, 11th, 13th)"</span>,
+    <span class="key">"movement"</span>: <span class="str">"Descending 
+      inversion transitions"</span>,
+    <span class="key">"texture"</span>: <span class="str">"Warm Rhodes / 
+      Electric piano dominant"</span>
+  }
+}</pre>
+    </div>
+    <div class="code-block">
+      <div class="code-header natural">
+        <span>Prompt 2 — Natural Language</span>
+        <span class="badge good">Outperforms</span>
+      </div>
+      <pre><span class="comment">// Flowing, descriptive format</span>
+
+dreamy plug nb, atmospheric pads,
+bell pluck melody, soft 808,
+sparse drums, melodic rap,
+romantic late night energy,
+weightless vibe,
+
+90s R&B Neo-Soul, laid-back
+swing groove, warm Rhodes chords
+with extended jazz voicings,
+reverse clap, sub-heavy kick,
+loose hi-hat triplets,
+92 BPM, analog warmth</pre>
+</div>
+
+  </div>
+
+  <p>
+    Scoring was conducted blindly — songs were evaluated without knowledge of which 
+    format produced them. Each dimension was rated 1–10. Prompt leakage was measured 
+    as a binary event per song.
+  </p>
+</section>
+
+<!-- SECTION 3: DATA RESULTS -->
+
+<section>
+  <span class="section-number">03 — Results</span>
+  <h2>The data, unfiltered</h2>
+
+  <div class="insight-grid fade-up">
+    <div class="insight-card">
+      <div class="insight-number accent">+23%</div>
+      <div class="insight-desc">Overall quality score improvement with natural language prompts vs JSON (avg across all dimensions)</div>
+    </div>
+    <div class="insight-card">
+      <div class="insight-number accent2">36%</div>
+      <div class="insight-desc">Prompt leakage rate in JSON-format songs — style tokens bleeding into generated lyrics</div>
+    </div>
+    <div class="insight-card">
+      <div class="insight-number accent">4%</div>
+      <div class="insight-desc">Prompt leakage rate in natural language songs — a 9× reduction</div>
+    </div>
+    <div class="insight-card">
+      <div class="insight-number neutral">2/25</div>
+      <div class="insight-desc">JSON songs that scored higher than the natural language average — exceptions, not the rule</div>
+    </div>
+  </div>
+
+  <div class="chart-section fade-up">
+    <div class="chart-title">Average Score by Dimension (out of 10)</div>
+
+```
+<div class="bar-group">
+  <div class="bar-label"><span>Style Accuracy</span></div>
+  <div style="display:grid; grid-template-columns:1fr; gap:6px;">
+    <div>
+      <div class="bar-label" style="font-size:12px; margin-bottom:4px;"><span style="color:#ff6b35;">JSON</span> <span class="score-low">5.8 / 10</span></div>
+      <div class="bar-track"><div class="bar-fill json-bar" style="--w:0.58" data-width="58%"></div></div>
+    </div>
+    <div>
+      <div class="bar-label" style="font-size:12px; margin-bottom:4px;"><span style="color:#e8ff47;">Natural Language</span> <span class="score-high">7.9 / 10</span></div>
+      <div class="bar-track"><div class="bar-fill natural-bar" data-width="79%"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="bar-group" style="margin-top:24px;">
+  <div class="bar-label"><span>Vocal Naturalness</span></div>
+  <div style="display:grid; grid-template-columns:1fr; gap:6px;">
+    <div>
+      <div class="bar-label" style="font-size:12px; margin-bottom:4px;"><span style="color:#ff6b35;">JSON</span> <span class="score-low">6.1 / 10</span></div>
+      <div class="bar-track"><div class="bar-fill json-bar" data-width="61%"></div></div>
+    </div>
+    <div>
+      <div class="bar-label" style="font-size:12px; margin-bottom:4px;"><span style="color:#e8ff47;">Natural Language</span> <span class="score-high">7.6 / 10</span></div>
+      <div class="bar-track"><div class="bar-fill natural-bar" data-width="76%"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="bar-group" style="margin-top:24px;">
+  <div class="bar-label"><span>Rhythmic Coherence</span></div>
+  <div style="display:grid; grid-template-columns:1fr; gap:6px;">
+    <div>
+      <div class="bar-label" style="font-size:12px; margin-bottom:4px;"><span style="color:#ff6b35;">JSON</span> <span class="score-low">5.4 / 10</span></div>
+      <div class="bar-track"><div class="bar-fill json-bar" data-width="54%"></div></div>
+    </div>
+    <div>
+      <div class="bar-label" style="font-size:12px; margin-bottom:4px;"><span style="color:#e8ff47;">Natural Language</span> <span class="score-high">7.4 / 10</span></div>
+      <div class="bar-track"><div class="bar-fill natural-bar" data-width="74%"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="bar-group" style="margin-top:24px;">
+  <div class="bar-label"><span>Mix Clarity</span></div>
+  <div style="display:grid; grid-template-columns:1fr; gap:6px;">
+    <div>
+      <div class="bar-label" style="font-size:12px; margin-bottom:4px;"><span style="color:#ff6b35;">JSON</span> <span class="score-mid">6.6 / 10</span></div>
+      <div class="bar-track"><div class="bar-fill json-bar" data-width="66%"></div></div>
+    </div>
+    <div>
+      <div class="bar-label" style="font-size:12px; margin-bottom:4px;"><span style="color:#e8ff47;">Natural Language</span> <span class="score-high">7.8 / 10</span></div>
+      <div class="bar-track"><div class="bar-fill natural-bar" data-width="78%"></div></div>
+    </div>
+  </div>
+</div>
+```
+
+  </div>
+
+  <div class="data-table-wrap fade-up">
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>JSON (avg)</th>
+          <th>Natural Language (avg)</th>
+          <th>Delta</th>
+          <th>Notable Pattern</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Style Accuracy</td>
+          <td class="score-low">5.8 / 10</td>
+          <td class="score-high">7.9 / 10</td>
+          <td class="score-high">+36%</td>
+          <td>JSON over-specifies; model ignores sub-parameters</td>
+        </tr>
+        <tr>
+          <td>Vocal Naturalness</td>
+          <td class="score-low">6.1 / 10</td>
+          <td class="score-high">7.6 / 10</td>
+          <td class="score-high">+25%</td>
+          <td>JSON vocals sounded more "robotic" and compressed</td>
+        </tr>
+        <tr>
+          <td>Rhythmic Coherence</td>
+          <td class="score-low">5.4 / 10</td>
+          <td class="score-high">7.4 / 10</td>
+          <td class="score-high">+37%</td>
+          <td>Swing/groove feel nearly absent in JSON outputs</td>
+        </tr>
+        <tr>
+          <td>Mix Clarity</td>
+          <td class="score-mid">6.6 / 10</td>
+          <td class="score-high">7.8 / 10</td>
+          <td class="score-high">+18%</td>
+          <td>Smallest gap — mix quality less prompt-dependent</td>
+        </tr>
+        <tr>
+          <td>Prompt Leakage Rate</td>
+          <td class="score-low">36%</td>
+          <td class="score-high">4%</td>
+          <td class="score-high">−89%</td>
+          <td>Syntax tokens ("key", "drums", "{") appearing in lyrics</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout fade-up">
+    <p>
+      <strong>Unexpected finding:</strong> The two JSON songs that outperformed the natural language 
+      average were both in genres with strong structural rigidity (electronic, drill). 
+      This suggests JSON format may have niche utility in highly structured genres 
+      where "feel" matters less than technical precision.
+    </p>
+  </div>
+</section>
+
+<!-- SECTION 4: EXPLANATION -->
+
+<section>
+  <span class="section-number">04 — Analysis</span>
+  <h2>Why this happens: three hypotheses</h2>
+
+  <div class="theory-block fade-up">
+    <div class="theory-label">
+      Hypothesis<br/>A<br/><br/>Training<br/>Distribution<br/>Mismatch
+    </div>
+    <div>
+      <h3>The model's native language is not JSON</h3>
+      <p>
+        Suno's underlying model was trained on vast corpora of human-written music descriptions, 
+        reviews, genre tags, and production notes — all of which are expressed in natural language. 
+        JSON syntax, by contrast, represents a vanishingly small fraction of that training distribution.
+      </p>
+      <p>
+        When a JSON-formatted prompt is submitted, the model must first allocate attention to 
+        parsing structural syntax (brackets, colons, quotation marks, nesting) before reaching 
+        semantic content. This creates <strong>upstream attention cost</strong> — computational 
+        resources spent on format interpretation rather than musical intent.
+      </p>
+      <p>
+        Natural language prompts arrive in a format that maps directly to the model's learned 
+        representations, enabling faster and more accurate semantic activation.
+      </p>
+    </div>
+  </div>
+
+  <div class="theory-block fade-up">
+    <div class="theory-label">
+      Hypothesis<br/>B<br/><br/>Token<br/>Boundary<br/>Bleed
+    </div>
+    <div>
+      <h3>Syntax tokens contaminate the generation boundary</h3>
+      <p>
+        Suno V5 does not maintain a hard architectural wall between style prompt processing 
+        and lyric generation. The prompt leakage phenomenon — where tokens like <code style="font-family:var(--mono);font-size:13px;color:#7dd3fc;">"drums"</code>, 
+        <code style="font-family:var(--mono);font-size:13px;color:#7dd3fc;">"kick"</code>, or even structural characters appear in generated lyrics — 
+        suggests that style and lyric generation share overlapping attention space.
+      </p>
+      <p>
+        JSON prompts introduce high-frequency structural tokens (curly braces, colons, quotes) 
+        that don't exist in natural music description. These tokens have no learned musical 
+        meaning, but occupy token positions in the input sequence. The model, trained to 
+        generate coherent continuations, occasionally surfaces these tokens in unexpected 
+        output positions — the generation boundary becomes "leaky."
+      </p>
+      <p>
+        Natural language prompts contain no such structural noise. Every token carries 
+        semantic musical weight.
+      </p>
+    </div>
+  </div>
+
+  <div class="theory-block fade-up">
+    <div class="theory-label">
+      Hypothesis<br/>C<br/><br/>Over-<br/>specification<br/>Collapse
+    </div>
+    <div>
+      <h3>Too much precision kills emergent musical creativity</h3>
+      <p>
+        Music — particularly feel-driven genres like Neo-Soul — emerges from the interaction 
+        between specified elements, not from each element in isolation. A "loose swing groove" 
+        is not the sum of hi-hat + kick + snare specifications. It is an emergent property 
+        of their relationship, timing, and interaction.
+      </p>
+      <p>
+        JSON prompts force the model to process each parameter independently, as discrete 
+        objects. Natural language prompts allow parameters to bleed into each other — 
+        "swinged mid-tempo pocket with deep laid-back rhythm" activates a holistic 
+        groove concept, not a component checklist.
+      </p>
+      <p>
+        This matters most in genres where <strong>feel is the product</strong>. 
+        In highly technical genres (EDM, drill), component-level specification 
+        may actually be advantageous — which explains the exception cases in our data.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 5: V6 RECOMMENDATIONS -->
+
+<section>
+  <span class="section-number">05 — Recommendations for V6</span>
+  <h2>What Suno could do next</h2>
+
+  <p>
+    These findings point to specific, addressable architectural and UX decisions 
+    for the next model generation. The following recommendations are ordered by 
+    estimated implementation complexity.
+  </p>
+
+  <ul class="rec-list">
+    <li class="fade-up">
+      <div class="rec-num">01</div>
+      <div>
+        <div class="rec-title">Implement a prompt normalization layer</div>
+        <p class="rec-desc">
+          Before the style prompt reaches the core generation model, a lightweight 
+          pre-processing layer should normalize structured input (JSON, YAML, 
+          markdown lists) into natural language equivalents. This would allow 
+          power users to write structured prompts for clarity and organization, 
+          while the model receives input in its native format. The normalization 
+          layer could itself be a small fine-tuned LLM.
+        </p>
+      </div>
+    </li>
+    <li class="fade-up">
+      <div class="rec-num">02</div>
+      <div>
+        <div class="rec-title">Harden the style-lyric generation boundary</div>
+        <p class="rec-desc">
+          The 36% leakage rate in JSON prompts — and the 4% residual in natural 
+          language — suggests insufficient isolation between style conditioning 
+          and lyric generation. V6 should explore stronger prompt boundary tokens, 
+          separate attention heads for style vs. lyric processing, or a two-stage 
+          generation architecture where style conditioning is finalized before 
+          lyric generation begins.
+        </p>
+      </div>
+    </li>
+    <li class="fade-up">
+      <div class="rec-num">03</div>
+      <div>
+        <div class="rec-title">Train on structured prompt ↔ natural language pairs</div>
+        <p class="rec-desc">
+          If structured prompts are a meaningful use case for Suno's power user base, 
+          the training data should reflect this. Adding a fine-tuning dataset of 
+          JSON/structured prompts paired with their natural language equivalents — 
+          and their corresponding high-quality outputs — would teach the model to 
+          extract musical intent from structured formats as effectively as from prose.
+        </p>
+      </div>
+    </li>
+    <li class="fade-up">
+      <div class="rec-num">04</div>
+      <div>
+        <div class="rec-title">Introduce genre-aware prompt strategy suggestions</div>
+        <p class="rec-desc">
+          Given the data showing JSON may outperform natural language in 
+          highly-structured genres (electronic, drill), V6 could implement 
+          a genre-detection system that recommends optimal prompt strategy 
+          based on musical context. Feel-driven genres would be nudged toward 
+          holistic natural language; structure-driven genres could leverage 
+          more precise parameter specification.
+        </p>
+      </div>
+    </li>
+    <li class="fade-up">
+      <div class="rec-num">05</div>
+      <div>
+        <div class="rec-title">Surface emergent musical relationships, not just components</div>
+        <p class="rec-desc">
+          The deepest finding in this research is that musical feel is an 
+          emergent property — it cannot be fully specified component by component. 
+          V6's training data curation should prioritize examples that demonstrate 
+          groove, feel, and emotional coherence as holistic targets, not as 
+          aggregations of technical parameters. This is a training philosophy 
+          shift, not just an architecture change.
+        </p>
+      </div>
+    </li>
+  </ul>
+</section>
+
+<!-- SECTION 6: CLOSING -->
+
+<section style="border-bottom: none;">
+  <span class="section-number">06 — Closing Note</span>
+  <h2>A note on methodology</h2>
+
+  <p>
+    This experiment has real limitations. Evaluation was conducted by a single researcher 
+    without blind inter-rater reliability testing. Sample size (n=50) is sufficient for 
+    directional findings but not for statistical significance claims. The musical concept 
+    used (90s R&B / Neo-Soul) may not generalize to all genres.
+  </p>
+
+  <p>
+    What this research offers is not proof, but <strong>a structured, reproducible 
+    observation from a user with deep platform experience</strong> — the kind of 
+    signal that internal teams may not be able to generate themselves due to 
+    proximity bias and optimization tunnel vision.
+  </p>
+
+  <p>
+    The author has generated 220+ songs on Suno over three months, including 
+    daily high-volume generation (30+ songs/day) with systematic quality filtering. 
+    The patterns described here have been observed consistently across hundreds of 
+    additional informal tests beyond this formal experiment.
+  </p>
+
+  <div class="callout fade-up">
+    <p>
+      <strong>To the Suno team:</strong> This research was written in the spirit of 
+      genuine collaboration. The platform has enabled a new kind of musical creativity 
+      that didn't exist before. These findings are offered as an attempt to help push 
+      it further — from impressive to extraordinary. The path from V5 to V6 runs 
+      directly through understanding how users actually prompt, not just how they 
+      ideally should.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div>
+    <div class="footer-text">© 2026 · Suno V5 Prompt Research</div>
+    <div class="footer-text" style="margin-top:6px; color:#444;">Independent research. Not affiliated with Suno, Inc.</div>
+  </div>
+  <a href="https://twitter.com/suno_ai" class="footer-cta" target="_blank">Share with @suno_ai →</a>
+</footer>
+
+<script>
+  // Progress bar
+  window.addEventListener('scroll', () => {
+    const scrollTop = window.scrollY;
+    const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = (scrollTop / docHeight) * 100;
+    document.getElementById('progress').style.width = progress + '%';
+  });
+
+  // Fade-up animations
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        // Animate bars
+        const bars = entry.target.querySelectorAll('.bar-fill');
+        bars.forEach(bar => {
+          setTimeout(() => {
+            const w = bar.getAttribute('data-width');
+            if (w) {
+              bar.style.width = w;
+              bar.classList.add('animated');
+            }
+          }, 200);
+        });
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+  // Also animate bars on initial load if visible
+  document.querySelectorAll('.bar-fill').forEach(bar => {
+    const w = bar.getAttribute('data-width');
+    if (w) bar.style.width = '0%';
+  });
+</script>
+
+</body>
+</html>
